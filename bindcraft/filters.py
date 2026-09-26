@@ -110,6 +110,7 @@ def ipsae_metric(protein_states: ProteinStates, predictions: StructurePrediction
     pae = metrics.get('pae')
     if pae is None:
         return None
+    pae = jnp.asarray(pae)
     protein_complex = predictions[prediction_state].protein_complex
     target = resolve_target_chain(protein_complex, target, prediction_state)
     if target not in protein_complex:
