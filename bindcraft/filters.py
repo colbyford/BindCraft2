@@ -123,12 +123,12 @@ def ipsae_metric(protein_states: ProteinStates, predictions: StructurePrediction
     interface_pae = pae[binder_slice[:, None], target_slice[None, :]]
     valid_pairs = interface_pae < pae_cutoff
     partner_count = valid_pairs.sum(-1)
-    d0 = jnp.maximum(1.0, 1.24 * (jnp.maximum(partner_count.astype(jnp.float32), 26.0) - 15.0) ** (1 / 3) - 1.8)
+    d0 = jnp.maximum(1.0, jnp.where(partner_count > 27, 1.24 * (partner_count.astype(jnp.float32) - 15.0) ** (1 / 3) - 1.8, 1.0))
     tm_scores = 1.0 / (1.0 + (interface_pae / d0[:, None]) ** 2)
     aligned_scores = jnp.where(valid_pairs, tm_scores, 0.0).sum(-1) / jnp.maximum(partner_count, 1)
     reverse_pairs = interface_pae.T < pae_cutoff
     reverse_count = reverse_pairs.sum(-1)
-    reverse_d0 = jnp.maximum(1.0, 1.24 * (jnp.maximum(reverse_count.astype(jnp.float32), 26.0) - 15.0) ** (1 / 3) - 1.8)
+    reverse_d0 = jnp.maximum(1.0, jnp.where(reverse_count > 27, 1.24 * (reverse_count.astype(jnp.float32) - 15.0) ** (1 / 3) - 1.8, 1.0))
     reverse_tm_scores = 1.0 / (1.0 + (interface_pae.T / reverse_d0[:, None]) ** 2)
     reverse_scores = jnp.where(reverse_pairs, reverse_tm_scores, 0.0).sum(-1) / jnp.maximum(reverse_count, 1)
     return float(jnp.maximum(aligned_scores.max(), reverse_scores.max()))
