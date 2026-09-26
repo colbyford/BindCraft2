@@ -62,6 +62,10 @@
         "threshold": 0.7,
         "higher": true
       },
+      "i_SAE": {
+        "threshold": null,
+        "higher": true
+      },
       "i_pAE": {
         "threshold": 0.35,
         "higher": false
@@ -189,6 +193,7 @@
     "min_iptm_mutate": 0.5,
     "min_iptm_refine": null,
     "min_iptm_screen": null,
+    "min_ipsae_final": null,
     "min_monomer_plddt_final": null,
     "min_n_terminus_away_cosine_final": null,
     "min_plddt_anneal": 0.65,

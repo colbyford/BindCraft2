@@ -98,6 +98,16 @@ def ipae_metric(protein_states: ProteinStates, predictions: StructurePredictions
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     return float(chain_pair_pae_loss(protein_states, predictions, prediction_state, (binder,), (resolve_target_chain(predictions[prediction_state].protein_complex, target, prediction_state),)))
 
+@filter_metric('i_SAE')
+@filter_metric('i_SAE_detarget')
+def ipsae_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex') -> float | None:
+    metric_names = ('ipsae', 'ipSAE', 'i_sae', 'i_SAE')
+    metrics = predictions[resolve_prediction_state(predictions, prediction_state)].metrics
+    for name in metric_names:
+        if name in metrics:
+            return float(metrics[name])
+    return None
+
 def binder_target_contact_masks(binder: Protein, target: Protein, cutoff: float=4.0) -> tuple[jnp.ndarray, jnp.ndarray]:
     binder_atom_positions, binder_atom_mask = binder.atoms.reshape(-1, 3), binder.atom_mask.reshape(-1)
     target_atom_positions, target_atom_mask = target.atoms.reshape(-1, 3), target.atom_mask.reshape(-1)
@@ -168,7 +178,7 @@ def interface_pdae_metric(protein_states: ProteinStates, predictions: StructureP
 
 INTERFACE_PDAE_METRICS = {'i_pDAE': interface_pdae_metric}
 
-AF2_CONFIDENCE_METRICS = frozenset({'pLDDT', 'pTM', 'i_pTM', 'Unbound_Binder_pLDDT', 'Target_pLDDT'})
+AF2_CONFIDENCE_METRICS = frozenset({'pLDDT', 'pTM', 'i_pTM', 'i_SAE', 'Unbound_Binder_pLDDT', 'Target_pLDDT'})
 
 def confidence_stage_filters(stage_filters: dict[str, DesignFilter]) -> dict[str, DesignFilter]:
     return {name: design_filter for name, design_filter in stage_filters.items() if name.partition('.')[0] in AF2_CONFIDENCE_METRICS}
