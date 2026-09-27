@@ -98,6 +98,42 @@ def ipae_metric(protein_states: ProteinStates, predictions: StructurePredictions
     prediction_state = resolve_prediction_state(predictions, prediction_state)
     return float(chain_pair_pae_loss(protein_states, predictions, prediction_state, (binder,), (resolve_target_chain(predictions[prediction_state].protein_complex, target, prediction_state),)))
 
+@filter_metric('i_SAE')
+@filter_metric('i_SAE_detarget')
+def ipsae_metric(protein_states: ProteinStates, predictions: StructurePredictions, prediction_state: str='complex', binder: str='binder', target: str='target', pae_cutoff: float=10.0) -> float | None:
+    metric_names = ('ipsae', 'ipSAE', 'i_sae', 'i_SAE')
+    prediction_state = resolve_prediction_state(predictions, prediction_state)
+    metrics = predictions[prediction_state].metrics
+    for name in metric_names:
+        if name in metrics:
+            return float(metrics[name])
+    pae = metrics.get('pae')
+    if pae is None:
+        return None
+    pae = jnp.asarray(pae)
+    protein_complex = predictions[prediction_state].protein_complex
+    target = resolve_target_chain(protein_complex, target, prediction_state)
+    if target not in protein_complex:
+        return None
+    binder_chains = binder_copy_chains(protein_complex, binder)
+    if not binder_chains:
+        return None
+    chain_slices = chain_residue_slices(protein_complex)
+    binder_slice = jnp.concatenate([jnp.arange(*chain_slices[name].indices(pae.shape[0]), dtype=jnp.int32) for name in binder_chains])
+    target_slice = jnp.arange(*chain_slices[target].indices(pae.shape[0]), dtype=jnp.int32)
+    interface_pae = pae[binder_slice[:, None], target_slice[None, :]]
+    valid_pairs = interface_pae < pae_cutoff
+    partner_count = valid_pairs.sum(-1)
+    d0 = jnp.maximum(1.0, jnp.where(partner_count > 27, 1.24 * (partner_count.astype(jnp.float32) - 15.0) ** (1 / 3) - 1.8, 1.0))
+    tm_scores = 1.0 / (1.0 + (interface_pae / d0[:, None]) ** 2)
+    aligned_scores = jnp.where(valid_pairs, tm_scores, 0.0).sum(-1) / jnp.maximum(partner_count, 1)
+    reverse_pairs = interface_pae.T < pae_cutoff
+    reverse_count = reverse_pairs.sum(-1)
+    reverse_d0 = jnp.maximum(1.0, jnp.where(reverse_count > 27, 1.24 * (reverse_count.astype(jnp.float32) - 15.0) ** (1 / 3) - 1.8, 1.0))
+    reverse_tm_scores = 1.0 / (1.0 + (interface_pae.T / reverse_d0[:, None]) ** 2)
+    reverse_scores = jnp.where(reverse_pairs, reverse_tm_scores, 0.0).sum(-1) / jnp.maximum(reverse_count, 1)
+    return float(jnp.maximum(aligned_scores.max(), reverse_scores.max()))
+
 def binder_target_contact_masks(binder: Protein, target: Protein, cutoff: float=4.0) -> tuple[jnp.ndarray, jnp.ndarray]:
     binder_atom_positions, binder_atom_mask = binder.atoms.reshape(-1, 3), binder.atom_mask.reshape(-1)
     target_atom_positions, target_atom_mask = target.atoms.reshape(-1, 3), target.atom_mask.reshape(-1)
@@ -168,7 +204,7 @@ def interface_pdae_metric(protein_states: ProteinStates, predictions: StructureP
 
 INTERFACE_PDAE_METRICS = {'i_pDAE': interface_pdae_metric}
 
-AF2_CONFIDENCE_METRICS = frozenset({'pLDDT', 'pTM', 'i_pTM', 'Unbound_Binder_pLDDT', 'Target_pLDDT'})
+AF2_CONFIDENCE_METRICS = frozenset({'pLDDT', 'pTM', 'i_pTM', 'i_SAE', 'Unbound_Binder_pLDDT', 'Target_pLDDT'})
 
 def confidence_stage_filters(stage_filters: dict[str, DesignFilter]) -> dict[str, DesignFilter]:
     return {name: design_filter for name, design_filter in stage_filters.items() if name.partition('.')[0] in AF2_CONFIDENCE_METRICS}
